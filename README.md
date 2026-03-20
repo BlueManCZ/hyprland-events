@@ -94,7 +94,7 @@ event = parse_event("workspacev2", "3,code")
 | `submap`             | `SubmapEvent`           | `name`                                      |
 | `changefloatingmode` | `FloatingEvent`         | `address`, `floating`                       |
 | `urgent`             | `UrgentEvent`           | `address`                                   |
-| `minimize`           | `MinimizeEvent`         | `address`, `minimized`                      |
+| `minimized`          | `MinimizeEvent`         | `address`, `minimized`                      |
 | `screencast`         | `ScreencastEvent`       | `active`, `owner`                           |
 | `windowtitlev2`      | `WindowTitleEvent`      | `address`, `title`                          |
 | `configreloaded`     | `ConfigReloadedEvent`   | *(none)*                                    |
@@ -109,6 +109,9 @@ event = parse_event("workspacev2", "3,code")
 
 Unrecognized events are passed to handlers as the raw
 `hyprland_socket.Event(name, data)` object.
+
+For sending commands and querying Hyprland state, see
+[hyprland-socket](https://github.com/BlueManCZ/hyprland-socket).
 
 ## License
 

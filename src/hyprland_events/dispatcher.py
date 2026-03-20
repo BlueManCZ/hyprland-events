@@ -1,15 +1,13 @@
 """Event dispatcher with blocking and fd-based integration modes."""
 
-from __future__ import annotations
-
 import logging
 import socket
-from collections import defaultdict
 from collections.abc import Callable
+from typing import overload
 
 from hyprland_socket import Event, connect_event_socket, parse_event_line
 
-from .types import parse_event
+from .events import parse_event
 
 log = logging.getLogger(__name__)
 
@@ -22,7 +20,12 @@ class EventDispatcher:
     """
 
     def __init__(self) -> None:
-        self._handlers: dict[str, list[Callable]] = defaultdict(list)
+        self._handlers: dict[str, list[Callable]] = {}
+
+    @overload
+    def on(self, event_name: str) -> Callable[[Callable], Callable]: ...
+    @overload
+    def on(self, event_name: str, callback: Callable) -> Callable: ...
 
     def on(self, event_name: str, callback: Callable | None = None) -> Callable:
         """Register a callback for an event name.
@@ -37,8 +40,9 @@ class EventDispatcher:
         """
 
         def _register(cb: Callable) -> Callable:
-            if cb not in self._handlers[event_name]:
-                self._handlers[event_name].append(cb)
+            handlers = self._handlers.setdefault(event_name, [])
+            if cb not in handlers:
+                handlers.append(cb)
             return cb
 
         if callback is not None:
@@ -47,15 +51,17 @@ class EventDispatcher:
 
     def off(self, event_name: str, callback: Callable) -> None:
         """Remove a callback for an event name."""
-        try:
-            self._handlers[event_name].remove(callback)
-        except ValueError:
-            pass
+        handlers = self._handlers.get(event_name)
+        if handlers is not None:
+            try:
+                handlers.remove(callback)
+            except ValueError:
+                pass
 
     def _dispatch(self, raw_event: Event) -> None:
         """Dispatch a raw event to all matching handlers.
 
-        Malformed events that fail to parse are logged and skipped —
+        Malformed events and failing handlers are logged and skipped —
         they will not crash the event loop.
         """
         try:
@@ -64,10 +70,16 @@ class EventDispatcher:
             log.debug("Failed to parse event %s: %r", raw_event.name, raw_event.data)
             typed = None
         payload = typed if typed is not None else raw_event
-        for cb in self._handlers.get(raw_event.name, []):
-            cb(payload)
-        for cb in self._handlers.get("*", []):
-            cb(payload)
+        for cb in list(self._handlers.get(raw_event.name, [])):
+            try:
+                cb(payload)
+            except Exception:
+                log.exception("Handler %r failed for event %s", cb, raw_event.name)
+        for cb in list(self._handlers.get("*", [])):
+            try:
+                cb(payload)
+            except Exception:
+                log.exception("Handler %r failed for event %s", cb, raw_event.name)
 
     def _process_lines(self, buf: str) -> str:
         """Parse and dispatch complete lines from *buf*, return the remainder."""

@@ -1,46 +1,52 @@
 """Typed event payloads for Hyprland events."""
 
-import dataclasses
-from collections.abc import Callable
-from dataclasses import dataclass
-from typing import Any, Self, get_type_hints
+from dataclasses import dataclass, fields
+from typing import Self, get_type_hints
 
 # --- Auto-parse machinery ---
 
-_COERCIONS: dict[type, Callable[[str], Any]] = {
-    str: str,
-    int: int,
-    bool: lambda s: s == "1",
-}
+
+def _parse_bool(s: str) -> bool:
+    return s == "1"
 
 
-class _AutoParse:
-    """Mixin that auto-generates ``parse()`` from dataclass field types.
+class HyprlandEvent:
+    """Base class for all typed Hyprland events.
 
-    Fields are filled left-to-right from comma-split parts. The last field
-    receives the unsplit remainder, preserving commas in values like titles.
-    Bool fields use the Hyprland convention: ``"1"`` is True, anything else
-    is False.
+    Auto-generates ``parse()`` from dataclass field types. Fields are filled
+    left-to-right from comma-split parts. The last field receives the unsplit
+    remainder, preserving commas in values like titles. Bool fields use the
+    Hyprland convention: ``"1"`` is True, anything else is False.
+
+    Field metadata is resolved once per subclass and cached on the class.
     """
 
     @classmethod
     def parse(cls, data: str) -> Self:
-        hints = get_type_hints(cls)
-        fields = dataclasses.fields(cls)  # type: ignore[arg-type]
-        if not fields:
+        try:
+            fc = cls.__dict__["_field_coercions"]
+        except KeyError:
+            hints = get_type_hints(cls)
+            fc = tuple(
+                (f.name, _parse_bool if hints[f.name] is bool else hints[f.name])
+                for f in fields(cls)  # type: ignore[arg-type]
+            )
+            cls._field_coercions = fc  # type: ignore[attr-defined]
+
+        if not fc:
             return cls()
-        if len(fields) == 1:
-            f = fields[0]
-            return cls(**{f.name: _COERCIONS[hints[f.name]](data)})
-        parts = data.split(",", len(fields) - 1)
-        return cls(**{f.name: _COERCIONS[hints[f.name]](v) for f, v in zip(fields, parts)})
+        if len(fc) == 1:
+            name, coerce = fc[0]
+            return cls(**{name: coerce(data)})
+        parts = data.split(",", len(fc) - 1)
+        return cls(**{name: coerce(v) for (name, coerce), v in zip(fc, parts)})
 
 
 # --- Event dataclasses ---
 
 
 @dataclass(frozen=True, slots=True)
-class WorkspaceEvent(_AutoParse):
+class WorkspaceEvent(HyprlandEvent):
     """Active workspace changed (workspacev2>>ID,NAME)."""
 
     id: int
@@ -48,7 +54,7 @@ class WorkspaceEvent(_AutoParse):
 
 
 @dataclass(frozen=True, slots=True)
-class FocusedMonitorEvent(_AutoParse):
+class FocusedMonitorEvent(HyprlandEvent):
     """Focused monitor changed (focusedmonv2>>MONNAME,WORKSPACEID)."""
 
     monitor: str
@@ -56,7 +62,7 @@ class FocusedMonitorEvent(_AutoParse):
 
 
 @dataclass(frozen=True, slots=True)
-class ActiveWindowEvent(_AutoParse):
+class ActiveWindowEvent(HyprlandEvent):
     """Active window changed (activewindow>>CLASS,TITLE)."""
 
     wm_class: str
@@ -64,21 +70,21 @@ class ActiveWindowEvent(_AutoParse):
 
 
 @dataclass(frozen=True, slots=True)
-class ActiveWindowV2Event(_AutoParse):
+class ActiveWindowV2Event(HyprlandEvent):
     """Active window changed (activewindowv2>>ADDRESS)."""
 
     address: str
 
 
 @dataclass(frozen=True, slots=True)
-class FullscreenEvent(_AutoParse):
+class FullscreenEvent(HyprlandEvent):
     """Fullscreen state changed (fullscreen>>STATE)."""
 
     active: bool
 
 
 @dataclass(frozen=True, slots=True)
-class MonitorAddedEvent(_AutoParse):
+class MonitorAddedEvent(HyprlandEvent):
     """Monitor added (monitoraddedv2>>ID,NAME,DESCRIPTION)."""
 
     id: int
@@ -87,7 +93,7 @@ class MonitorAddedEvent(_AutoParse):
 
 
 @dataclass(frozen=True, slots=True)
-class MonitorRemovedEvent(_AutoParse):
+class MonitorRemovedEvent(HyprlandEvent):
     """Monitor removed (monitorremovedv2>>ID,NAME,DESCRIPTION)."""
 
     id: int
@@ -96,7 +102,7 @@ class MonitorRemovedEvent(_AutoParse):
 
 
 @dataclass(frozen=True, slots=True)
-class CreateWorkspaceEvent(_AutoParse):
+class CreateWorkspaceEvent(HyprlandEvent):
     """Workspace created (createworkspacev2>>ID,NAME)."""
 
     id: int
@@ -104,7 +110,7 @@ class CreateWorkspaceEvent(_AutoParse):
 
 
 @dataclass(frozen=True, slots=True)
-class DestroyWorkspaceEvent(_AutoParse):
+class DestroyWorkspaceEvent(HyprlandEvent):
     """Workspace destroyed (destroyworkspacev2>>ID,NAME)."""
 
     id: int
@@ -112,7 +118,7 @@ class DestroyWorkspaceEvent(_AutoParse):
 
 
 @dataclass(frozen=True, slots=True)
-class MoveWorkspaceEvent(_AutoParse):
+class MoveWorkspaceEvent(HyprlandEvent):
     """Workspace moved to monitor (moveworkspacev2>>ID,NAME,MONNAME)."""
 
     id: int
@@ -121,7 +127,7 @@ class MoveWorkspaceEvent(_AutoParse):
 
 
 @dataclass(frozen=True, slots=True)
-class RenameWorkspaceEvent(_AutoParse):
+class RenameWorkspaceEvent(HyprlandEvent):
     """Workspace renamed (renameworkspace>>ID,NEWNAME)."""
 
     id: int
@@ -129,7 +135,7 @@ class RenameWorkspaceEvent(_AutoParse):
 
 
 @dataclass(frozen=True, slots=True)
-class ActiveSpecialEvent(_AutoParse):
+class ActiveSpecialEvent(HyprlandEvent):
     """Active special workspace changed (activespecialv2>>ID,NAME,MONNAME)."""
 
     id: int
@@ -138,7 +144,7 @@ class ActiveSpecialEvent(_AutoParse):
 
 
 @dataclass(frozen=True, slots=True)
-class ActiveLayoutEvent(_AutoParse):
+class ActiveLayoutEvent(HyprlandEvent):
     """Keyboard layout changed (activelayout>>KEYBOARD,LAYOUT)."""
 
     keyboard: str
@@ -146,7 +152,7 @@ class ActiveLayoutEvent(_AutoParse):
 
 
 @dataclass(frozen=True, slots=True)
-class OpenWindowEvent(_AutoParse):
+class OpenWindowEvent(HyprlandEvent):
     """Window opened (openwindow>>ADDRESS,WORKSPACE,CLASS,TITLE)."""
 
     address: str
@@ -156,14 +162,14 @@ class OpenWindowEvent(_AutoParse):
 
 
 @dataclass(frozen=True, slots=True)
-class CloseWindowEvent(_AutoParse):
+class CloseWindowEvent(HyprlandEvent):
     """Window closed (closewindow>>ADDRESS)."""
 
     address: str
 
 
 @dataclass(frozen=True, slots=True)
-class MoveWindowEvent(_AutoParse):
+class MoveWindowEvent(HyprlandEvent):
     """Window moved (movewindowv2>>ADDRESS,ID,NAME)."""
 
     address: str
@@ -172,28 +178,28 @@ class MoveWindowEvent(_AutoParse):
 
 
 @dataclass(frozen=True, slots=True)
-class OpenLayerEvent(_AutoParse):
+class OpenLayerEvent(HyprlandEvent):
     """Layer surface opened (openlayer>>NAMESPACE)."""
 
     namespace: str
 
 
 @dataclass(frozen=True, slots=True)
-class CloseLayerEvent(_AutoParse):
+class CloseLayerEvent(HyprlandEvent):
     """Layer surface closed (closelayer>>NAMESPACE)."""
 
     namespace: str
 
 
 @dataclass(frozen=True, slots=True)
-class SubmapEvent(_AutoParse):
+class SubmapEvent(HyprlandEvent):
     """Submap changed (submap>>NAME)."""
 
     name: str
 
 
 @dataclass(frozen=True, slots=True)
-class FloatingEvent(_AutoParse):
+class FloatingEvent(HyprlandEvent):
     """Floating mode changed (changefloatingmode>>ADDRESS,FLOATING)."""
 
     address: str
@@ -201,30 +207,30 @@ class FloatingEvent(_AutoParse):
 
 
 @dataclass(frozen=True, slots=True)
-class UrgentEvent(_AutoParse):
+class UrgentEvent(HyprlandEvent):
     """Urgent window (urgent>>ADDRESS)."""
 
     address: str
 
 
 @dataclass(frozen=True, slots=True)
-class MinimizeEvent(_AutoParse):
-    """Window minimized (minimize>>ADDRESS,MINIMIZED)."""
+class MinimizeEvent(HyprlandEvent):
+    """Window minimized (minimized>>ADDRESS,MINIMIZED)."""
 
     address: str
     minimized: bool
 
 
 @dataclass(frozen=True, slots=True)
-class ScreencastEvent(_AutoParse):
+class ScreencastEvent(HyprlandEvent):
     """Screencast state changed (screencast>>STATE,OWNER)."""
 
     active: bool
-    owner: str
+    owner: int
 
 
 @dataclass(frozen=True, slots=True)
-class WindowTitleEvent(_AutoParse):
+class WindowTitleEvent(HyprlandEvent):
     """Window title changed (windowtitlev2>>ADDRESS,TITLE)."""
 
     address: str
@@ -232,12 +238,12 @@ class WindowTitleEvent(_AutoParse):
 
 
 @dataclass(frozen=True, slots=True)
-class ConfigReloadedEvent(_AutoParse):
+class ConfigReloadedEvent(HyprlandEvent):
     """Config reloaded (configreloaded>>)."""
 
 
 @dataclass(frozen=True, slots=True)
-class PinEvent(_AutoParse):
+class PinEvent(HyprlandEvent):
     """Window pinned (pin>>ADDRESS,STATE)."""
 
     address: str
@@ -245,14 +251,14 @@ class PinEvent(_AutoParse):
 
 
 @dataclass(frozen=True, slots=True)
-class KillEvent(_AutoParse):
+class KillEvent(HyprlandEvent):
     """Window killed via hyprctl kill (kill>>ADDRESS)."""
 
     address: str
 
 
 @dataclass(frozen=True, slots=True)
-class ToggleGroupEvent:
+class ToggleGroupEvent(HyprlandEvent):
     """Group toggled (togglegroup>>STATE,ADDRESSES).
 
     Addresses is a comma-separated list of window addresses in the group.
@@ -269,35 +275,35 @@ class ToggleGroupEvent:
 
 
 @dataclass(frozen=True, slots=True)
-class MoveIntoGroupEvent(_AutoParse):
+class MoveIntoGroupEvent(HyprlandEvent):
     """Window moved into group (moveintogroup>>ADDRESS)."""
 
     address: str
 
 
 @dataclass(frozen=True, slots=True)
-class MoveOutOfGroupEvent(_AutoParse):
+class MoveOutOfGroupEvent(HyprlandEvent):
     """Window moved out of group (moveoutofgroup>>ADDRESS)."""
 
     address: str
 
 
 @dataclass(frozen=True, slots=True)
-class IgnoreGroupLockEvent(_AutoParse):
+class IgnoreGroupLockEvent(HyprlandEvent):
     """ignoregrouplock toggled (ignoregrouplock>>STATE)."""
 
     active: bool
 
 
 @dataclass(frozen=True, slots=True)
-class LockGroupsEvent(_AutoParse):
+class LockGroupsEvent(HyprlandEvent):
     """lockgroups toggled (lockgroups>>STATE)."""
 
     locked: bool
 
 
 @dataclass(frozen=True, slots=True)
-class BellEvent(_AutoParse):
+class BellEvent(HyprlandEvent):
     """System bell requested (bell>>ADDRESS).
 
     Address may be empty if the bell is not associated with a window.
@@ -310,7 +316,7 @@ class BellEvent(_AutoParse):
 # Maps v2 event names (preferred) to their parse functions.
 # For events that have both v1 and v2 variants, only the v2 is registered.
 
-EVENT_PARSERS: dict[str, type[_AutoParse] | type[ToggleGroupEvent]] = {
+EVENT_PARSERS: dict[str, type[HyprlandEvent]] = {
     "workspacev2": WorkspaceEvent,
     "focusedmonv2": FocusedMonitorEvent,
     "activewindow": ActiveWindowEvent,
@@ -332,7 +338,7 @@ EVENT_PARSERS: dict[str, type[_AutoParse] | type[ToggleGroupEvent]] = {
     "submap": SubmapEvent,
     "changefloatingmode": FloatingEvent,
     "urgent": UrgentEvent,
-    "minimize": MinimizeEvent,
+    "minimized": MinimizeEvent,
     "screencast": ScreencastEvent,
     "windowtitlev2": WindowTitleEvent,
     "configreloaded": ConfigReloadedEvent,
@@ -347,7 +353,7 @@ EVENT_PARSERS: dict[str, type[_AutoParse] | type[ToggleGroupEvent]] = {
 }
 
 
-def parse_event(name: str, data: str) -> object | None:
+def parse_event(name: str, data: str) -> HyprlandEvent | None:
     """Parse a raw event name and data into a typed dataclass, or None if unknown."""
     cls = EVENT_PARSERS.get(name)
     if cls is None:

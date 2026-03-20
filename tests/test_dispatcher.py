@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 from hyprland_socket import Event
 
 from hyprland_events.dispatcher import EventDispatcher
-from hyprland_events.types import MonitorRemovedEvent, WorkspaceEvent
+from hyprland_events.events import MonitorRemovedEvent, WorkspaceEvent
 
 
 class TestOnOff:

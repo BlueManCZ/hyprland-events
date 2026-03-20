@@ -1,6 +1,6 @@
 """Tests for typed event parsing."""
 
-from hyprland_events.types import (
+from hyprland_events.events import (
     ActiveLayoutEvent,
     ActiveSpecialEvent,
     ActiveWindowEvent,
@@ -223,7 +223,7 @@ class TestScreencastEvent:
     def test_active(self):
         e = ScreencastEvent.parse("1,0")
         assert e.active is True
-        assert e.owner == "0"
+        assert e.owner == 0
 
 
 class TestWindowTitleEvent:
@@ -320,6 +320,6 @@ class TestParseEvent:
         assert parse_event("unknownevent", "data") is None
 
     def test_all_registered_events(self):
-        from hyprland_events.types import EVENT_PARSERS
+        from hyprland_events.events import EVENT_PARSERS
 
         assert len(EVENT_PARSERS) == 33

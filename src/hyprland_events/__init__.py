@@ -1,7 +1,7 @@
 """hyprland-events — Typed event dispatch for Hyprland."""
 
 from .dispatcher import EventDispatcher as EventDispatcher
-from .types import (
+from .events import (
     ActiveLayoutEvent as ActiveLayoutEvent,
     ActiveSpecialEvent as ActiveSpecialEvent,
     ActiveWindowEvent as ActiveWindowEvent,
@@ -15,6 +15,7 @@ from .types import (
     FloatingEvent as FloatingEvent,
     FocusedMonitorEvent as FocusedMonitorEvent,
     FullscreenEvent as FullscreenEvent,
+    HyprlandEvent as HyprlandEvent,
     IgnoreGroupLockEvent as IgnoreGroupLockEvent,
     KillEvent as KillEvent,
     LockGroupsEvent as LockGroupsEvent,
