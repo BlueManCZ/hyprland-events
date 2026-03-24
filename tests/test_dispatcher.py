@@ -27,7 +27,7 @@ class TestOnOff:
         cb = MagicMock()
         d.on("workspacev2", cb)
         d.off("workspacev2", cb)
-        assert cb not in d._handlers["workspacev2"]
+        assert "workspacev2" not in d._handlers
 
     def test_off_missing_is_noop(self):
         d = EventDispatcher()
@@ -76,7 +76,7 @@ class TestDecorator:
             pass
 
         d.off("workspacev2", handler)
-        assert handler not in d._handlers["workspacev2"]
+        assert "workspacev2" not in d._handlers
 
 
 class TestDispatch:

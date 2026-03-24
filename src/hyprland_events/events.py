@@ -313,8 +313,9 @@ class BellEvent(HyprlandEvent):
 
 
 # --- Parser registry ---
-# Maps v2 event names (preferred) to their parse functions.
-# For events that have both v1 and v2 variants, only the v2 is registered.
+# Built after all @dataclass decorators have run, so each value is the final
+# (slots-enabled) class — not the pre-decoration original that
+# __init_subclass__ would have captured.
 
 EVENT_PARSERS: dict[str, type[HyprlandEvent]] = {
     "workspacev2": WorkspaceEvent,

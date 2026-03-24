@@ -3,9 +3,10 @@
 import logging
 import socket
 from collections.abc import Callable
+from itertools import chain
 from typing import overload
 
-from hyprland_socket import Event, connect_event_socket, parse_event_line
+from hyprland_socket import Event, connect_event_socket, listen, parse_event_line
 
 from .events import parse_event
 
@@ -57,6 +58,8 @@ class EventDispatcher:
                 handlers.remove(callback)
             except ValueError:
                 pass
+            if not handlers:
+                del self._handlers[event_name]
 
     def _dispatch(self, raw_event: Event) -> None:
         """Dispatch a raw event to all matching handlers.
@@ -70,12 +73,10 @@ class EventDispatcher:
             log.debug("Failed to parse event %s: %r", raw_event.name, raw_event.data)
             typed = None
         payload = typed if typed is not None else raw_event
-        for cb in list(self._handlers.get(raw_event.name, [])):
-            try:
-                cb(payload)
-            except Exception:
-                log.exception("Handler %r failed for event %s", cb, raw_event.name)
-        for cb in list(self._handlers.get("*", [])):
+        for cb in chain(
+            self._handlers.get(raw_event.name, ()),
+            self._handlers.get("*", ()),
+        ):
             try:
                 cb(payload)
             except Exception:
@@ -95,19 +96,8 @@ class EventDispatcher:
 
         Returns when the socket closes or *timeout* is reached (if set).
         """
-        sock = connect_event_socket(timeout)
-        try:
-            buf = ""
-            while True:
-                try:
-                    chunk = sock.recv(4096)
-                except TimeoutError:
-                    return
-                if not chunk:
-                    break
-                buf = self._process_lines(buf + chunk.decode())
-        finally:
-            sock.close()
+        for event in listen(timeout):
+            self._dispatch(event)
 
     def connect(
         self, timeout: float | None = None
