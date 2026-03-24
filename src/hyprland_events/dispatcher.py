@@ -82,14 +82,19 @@ class EventDispatcher:
             except Exception:
                 log.exception("Handler %r failed for event %s", cb, raw_event.name)
 
-    def _process_lines(self, buf: str) -> str:
-        """Parse and dispatch complete lines from *buf*, return the remainder."""
-        while "\n" in buf:
-            line, buf = buf.split("\n", 1)
+    def _process_buf(self, buf: bytearray) -> None:
+        """Parse and dispatch complete lines from *buf*, consuming them in place."""
+        while b"\n" in buf:
+            line_bytes, _, remainder = buf.partition(b"\n")
+            buf.clear()
+            buf.extend(remainder)
+            try:
+                line = line_bytes.decode()
+            except UnicodeDecodeError:
+                continue
             event = parse_event_line(line)
             if event is not None:
                 self._dispatch(event)
-        return buf
 
     def run(self, timeout: float | None = None) -> None:
         """Blocking event loop — reads from the event socket and dispatches.
@@ -117,10 +122,10 @@ class EventDispatcher:
             )
         """
         sock = connect_event_socket(timeout)
-        buf = ""
+        buf = bytearray()
 
         def feed(data: bytes) -> None:
-            nonlocal buf
-            buf = self._process_lines(buf + data.decode())
+            buf.extend(data)
+            self._process_buf(buf)
 
         return sock, feed
